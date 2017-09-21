@@ -8,6 +8,14 @@ from PIL import Image
 import pickle
 import csv
 import warnings
+try: #py3
+    from urllib.parse import urlparse
+    from urllib import request
+except: #py2
+    from urlparse import urlparse
+    from six.moves.urllib import request
+from io import BytesIO
+
 
 """
 Preprocessing provides some useful functions to preprocess data before
@@ -411,7 +419,7 @@ def build_hdf5_image_dataset(target_path, image_shape, output_path='dataset.h5',
             img = resize_image(img, image_shape[0], image_shape[1])
         if grayscale:
             img = convert_color(img, 'L')
-        elif img.mode == 'L':
+        elif img.mode == 'L' or img.mode == 'RGBA':
             img = convert_color(img, 'RGB')
 
         img = pil_to_nparray(img)
@@ -538,7 +546,15 @@ def image_preloader(target_path, image_shape, mode='file', normalize=True,
 
 def load_image(in_image):
     """ Load an image, returns PIL.Image. """
-    img = Image.open(in_image)
+    # if the path appears to be an URL
+    if urlparse(in_image).scheme in ('http', 'https',):
+        # set up the byte stream
+        img_stream = BytesIO(request.urlopen(in_image).read())
+        # and read in as PIL image
+        img = Image.open(img_stream)
+    else:
+        # else use it as local file path
+        img = Image.open(in_image)
     return img
 
 
@@ -832,6 +848,8 @@ class ImagePreloader(Preloader):
         if grayscale:
             img = convert_color(img, 'L')
         img = pil_to_nparray(img)
+        if grayscale:
+            img = np.reshape(img, img.shape + (1,))
         if normalize:
             img /= 255.
         return img
